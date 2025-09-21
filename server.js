@@ -2,10 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const db = require('./config/db');
-
 const authRoutes = require('./routes/authRoutes');
-
 const app = express();
+const reportRoutes = require('./routes/reportRoutes');
+
 app.use(express.json());
 app.use(cors());
 
@@ -15,8 +15,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', db: dbStatus, time: new Date().toISOString() });
 });
 
-// Routes
+// Routes - temporarily commented out
 app.use('/api', authRoutes);
+app.use('/api', reportRoutes);
 
 const PORT = process.env.SERVER_PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));

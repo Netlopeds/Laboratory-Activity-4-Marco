@@ -1,23 +1,49 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
-module.exports = function auth(required = true) {
+// Auth middleware factory function
+const auth = (required = false) => {
   return (req, res, next) => {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+      if (required) {
+        return res.status(401).json({ error: 'Access token required' });
+      }
+      return next(); // Optional auth, continue without user
+    }
+
     try {
-      const header = req.headers['authorization'] || '';
-      const [, token] = header.split(' ');
-      if (!token) return required ? res.status(401).json({ error: 'missing bearer token' }) : next();
-
       const payload = jwt.verify(token, process.env.JWT_SECRET);
-      db.query('SELECT id FROM revoked_tokens WHERE jti=? LIMIT 1', [payload.jti], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (rows.length) return res.status(401).json({ error: 'token revoked' });
-
-        req.user = { id: payload.sub, email: payload.email, role: payload.role || 'student', jti: payload.jti };
+      
+      // Check if token is revoked
+      db.query('SELECT jti FROM revoked_tokens WHERE jti = ?', [payload.jti], (err, rows) => {
+        if (err) {
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (rows.length > 0) {
+          return res.status(401).json({ error: 'Token has been revoked' });
+        }
+        
+        // Attach user info to request
+        req.user = {
+          id: payload.sub,
+          email: payload.email,
+          role: payload.role,
+          jti: payload.jti
+        };
+        
         next();
       });
-    } catch {
-      return res.status(401).json({ error: 'invalid or expired token' });
+    } catch (error) {
+      if (required) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+      next(); // Optional auth, continue without user
     }
   };
 };
+
+module.exports = auth;
